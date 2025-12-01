@@ -1,29 +1,51 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<svg width="128" height="128" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
   <defs>
-    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#4a90d9;stop-opacity:1" />
-      <stop offset="100%" style="stop-color:#2c5aa0;stop-opacity:1" />
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1976d2"/>
+      <stop offset="100%" style="stop-color:#0d47a1"/>
+    </linearGradient>
+    <linearGradient id="boxGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#ffffff"/>
+      <stop offset="100%" style="stop-color:#e0e0e0"/>
     </linearGradient>
   </defs>
   
   <!-- Background circle -->
-  <circle cx="64" cy="64" r="60" fill="url(#bgGradient)" />
+  <circle cx="64" cy="64" r="60" fill="url(#bgGrad)"/>
+  
+  <!-- Package box (3D effect) -->
+  <!-- Box front -->
+  <path d="M32 50 L64 35 L96 50 L96 85 L64 100 L32 85 Z" fill="url(#boxGrad)" stroke="#1565c0" stroke-width="2"/>
+  <!-- Box top -->
+  <path d="M32 50 L64 35 L96 50 L64 65 Z" fill="#f5f5f5" stroke="#1565c0" stroke-width="2"/>
+  <!-- Box center line -->
+  <line x1="64" y1="65" x2="64" y2="100" stroke="#1565c0" stroke-width="2"/>
+  <!-- Box side shade -->
+  <path d="M64 65 L96 50 L96 85 L64 100 Z" fill="#e0e0e0" stroke="#1565c0" stroke-width="2"/>
   
   <!-- Download arrow -->
-  <g fill="white">
-    <!-- Arrow body -->
-    <rect x="54" y="28" width="20" height="40" rx="3"/>
-    
+  <g transform="translate(64,58)">
+    <!-- Arrow shaft -->
+    <rect x="-6" y="-20" width="12" height="24" rx="2" fill="#4caf50"/>
     <!-- Arrow head -->
-    <polygon points="64,92 40,60 52,60 52,68 76,68 76,60 88,60"/>
-    
-    <!-- Base line -->
-    <rect x="36" y="88" width="56" height="8" rx="4"/>
+    <polygon points="-14,4 0,18 14,4" fill="#4caf50"/>
   </g>
   
-  <!-- GitHub-like circle accent -->
-  <circle cx="96" cy="32" r="16" fill="rgba(255,255,255,0.2)"/>
-  <circle cx="96" cy="32" r="10" fill="white"/>
-  <circle cx="96" cy="32" r="6" fill="url(#bgGradient)"/>
+  <!-- Circular arrow (update/sync) around the box -->
+  <g fill="none" stroke="#ff9800" stroke-width="4" stroke-linecap="round">
+    <!-- Top arc -->
+    <path d="M40 28 A30 30 0 0 1 88 28"/>
+    <!-- Arrow head on arc -->
+    <polygon points="88,28 82,20 80,32" fill="#ff9800"/>
+  </g>
+  
+  <!-- Small penguin silhouette (Linux) -->
+  <g transform="translate(98,95) scale(0.4)">
+    <ellipse cx="0" cy="0" rx="12" ry="15" fill="#333"/>
+    <ellipse cx="0" cy="-12" rx="9" ry="10" fill="#333"/>
+    <ellipse cx="0" cy="2" rx="8" ry="10" fill="#fff"/>
+    <circle cx="-3" cy="-14" r="2" fill="#fff"/>
+    <circle cx="3" cy="-14" r="2" fill="#fff"/>
+    <ellipse cx="0" cy="-8" rx="2" ry="1.5" fill="#ff9800"/>
+  </g>
 </svg>
