@@ -1,11 +1,15 @@
 """SQLite database for storing app information."""
 
-import os
 import sqlite3
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional
 from pathlib import Path
+
+# Autonomix's own repository for self-updates
+AUTONOMIX_REPO_URL = "https://github.com/PlebOne/autonomix"
+AUTONOMIX_OWNER = "PlebOne"
+AUTONOMIX_REPO = "autonomix"
 
 
 @dataclass
@@ -72,6 +76,45 @@ class Database:
                 )
             ''')
             conn.commit()
+        
+        # Register Autonomix itself for self-updates on first run
+        self._register_self()
+    
+    def _register_self(self):
+        """Register Autonomix itself for self-updates if not already registered."""
+        existing = self.get_app_by_repo(AUTONOMIX_OWNER, AUTONOMIX_REPO)
+        if existing:
+            return  # Already registered
+        
+        # Get current installed version
+        try:
+            from importlib.metadata import version
+            installed_version = version("autonomix")
+        except Exception:
+            # Running from source - try to get version from package
+            try:
+                from autonomix import __version__
+                installed_version = __version__
+            except Exception:
+                installed_version = "dev"
+        
+        now = datetime.now().isoformat()
+        autonomix_app = App(
+            id=None,
+            name="Autonomix",
+            repo_url=AUTONOMIX_REPO_URL,
+            owner=AUTONOMIX_OWNER,
+            repo=AUTONOMIX_REPO,
+            installed_version=installed_version,
+            latest_version=None,
+            package_type="pip",  # Use pip for self-updates
+            install_path=None,
+            added_at=now,
+            updated_at=now,
+            auto_update=False,
+            include_prerelease=False,
+        )
+        self.add_app(autonomix_app)
     
     def add_app(self, app: App) -> int:
         """Add a new app to the database."""

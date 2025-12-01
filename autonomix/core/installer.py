@@ -487,6 +487,75 @@ class SourceInstaller(BaseInstaller):
         return None
 
 
+class PipInstaller(BaseInstaller):
+    """Installer for Python packages via pip (used for Autonomix self-updates)."""
+    
+    def is_available(self) -> bool:
+        return shutil.which('pip') is not None or shutil.which('pip3') is not None
+    
+    def _get_pip_cmd(self) -> list[str]:
+        """Get the pip command to use."""
+        if shutil.which('pip3'):
+            return ['pip3']
+        return ['pip']
+    
+    def install(self, package_path: str, progress_callback: Optional[Callable] = None) -> str:
+        """Install a Python wheel package."""
+        if not os.path.exists(package_path):
+            raise InstallerError(f"Package not found: {package_path}")
+        
+        try:
+            cmd = self._get_pip_cmd() + ['install', '--upgrade', package_path]
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            
+            if result.returncode != 0:
+                raise InstallerError(f"pip installation failed: {result.stderr}")
+            
+            return "pip (user site-packages)"
+            
+        except subprocess.CalledProcessError as e:
+            raise InstallerError(f"Failed to install pip package: {e.stderr}")
+    
+    def install_from_url(self, url: str, progress_callback: Optional[Callable] = None) -> str:
+        """Install directly from a URL (e.g., GitHub release asset)."""
+        try:
+            cmd = self._get_pip_cmd() + ['install', '--upgrade', url]
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            
+            if result.returncode != 0:
+                raise InstallerError(f"pip installation failed: {result.stderr}")
+            
+            return "pip (user site-packages)"
+            
+        except subprocess.CalledProcessError as e:
+            raise InstallerError(f"Failed to install pip package: {e.stderr}")
+    
+    def uninstall(self, app_name: str, install_path: Optional[str] = None) -> bool:
+        try:
+            cmd = self._get_pip_cmd() + ['uninstall', '-y', app_name]
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            return result.returncode == 0
+        except subprocess.CalledProcessError:
+            return False
+    
+    def is_installed(self, app_name: str) -> bool:
+        """Check if a pip package is installed."""
+        try:
+            from importlib.metadata import distribution
+            distribution(app_name)
+            return True
+        except Exception:
+            return False
+    
+    def get_installed_version(self, app_name: str) -> Optional[str]:
+        """Get the installed version of a pip package."""
+        try:
+            from importlib.metadata import version
+            return version(app_name)
+        except Exception:
+            return None
+
+
 class PackageInstaller:
     """Main package installer that selects the appropriate installer."""
     
@@ -497,6 +566,7 @@ class PackageInstaller:
             'appimage': AppImageInstaller(),
             'tarball': SourceInstaller(),
             'source': SourceInstaller(),
+            'pip': PipInstaller(),
         }
     
     def get_available_types(self) -> list[str]:
