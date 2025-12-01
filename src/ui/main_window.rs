@@ -385,6 +385,13 @@ impl MainWindow {
                         toast_overlay.add_toast(toast);
                     }
 
+                    AppMessage::AppUpdated(_, _) => {
+                        // Reload to show updated versions
+                        if let Ok(apps) = db.get_all_apps() {
+                            let _ = tx.send(AppMessage::AppsLoaded(apps));
+                        }
+                    }
+
                     _ => {}
                 }
             }
