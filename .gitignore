@@ -86,3 +86,5 @@ debian/files
 debian/*.log
 debian/*.substvars
 rpmbuild/
+build-pkg/*.tar.gz
+pkg-build/deb/usr/bin/

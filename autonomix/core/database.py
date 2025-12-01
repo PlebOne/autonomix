@@ -163,6 +163,50 @@ class Database:
         if os.environ.get('APPIMAGE'):
             return 'appimage', self._get_python_version()
         
+        # Check if installed via Flatpak
+        if shutil.which('flatpak'):
+            try:
+                result = subprocess.run(
+                    ['flatpak', 'list', '--app', '--columns=application'],
+                    capture_output=True,
+                    text=True
+                )
+                if result.returncode == 0:
+                    for line in result.stdout.strip().split('\n'):
+                        if 'autonomix' in line.lower():
+                            # Get version
+                            version_result = subprocess.run(
+                                ['flatpak', 'info', line.strip()],
+                                capture_output=True,
+                                text=True
+                            )
+                            if version_result.returncode == 0:
+                                for vline in version_result.stdout.split('\n'):
+                                    if vline.strip().startswith('Version:'):
+                                        return 'flatpak', vline.split(':', 1)[1].strip()
+                            return 'flatpak', self._get_python_version()
+            except Exception:
+                pass
+        
+        # Check if installed via Snap
+        if shutil.which('snap'):
+            try:
+                result = subprocess.run(
+                    ['snap', 'list'],
+                    capture_output=True,
+                    text=True
+                )
+                if result.returncode == 0:
+                    for line in result.stdout.strip().split('\n')[1:]:  # Skip header
+                        parts = line.split()
+                        if parts and 'autonomix' in parts[0].lower():
+                            # Version is second column
+                            if len(parts) >= 2:
+                                return 'snap', parts[1]
+                            return 'snap', self._get_python_version()
+            except Exception:
+                pass
+        
         # Default to pip
         return 'pip', self._get_python_version()
     

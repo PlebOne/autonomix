@@ -556,6 +556,179 @@ class PipInstaller(BaseInstaller):
             return None
 
 
+class FlatpakInstaller(BaseInstaller):
+    """Installer for Flatpak packages."""
+    
+    def is_available(self) -> bool:
+        return shutil.which('flatpak') is not None
+    
+    def install(self, package_path: str, progress_callback: Optional[Callable] = None) -> str:
+        """Install a Flatpak package (.flatpak file or remote ref)."""
+        try:
+            if os.path.exists(package_path):
+                # Install from local .flatpak bundle
+                cmd = ['flatpak', 'install', '--user', '-y', package_path]
+            else:
+                # Assume it's a remote ref like "flathub org.example.App"
+                cmd = ['flatpak', 'install', '--user', '-y'] + package_path.split()
+            
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            
+            if result.returncode != 0:
+                raise InstallerError(f"Flatpak installation failed: {result.stderr}")
+            
+            return "flatpak (user installation)"
+            
+        except subprocess.CalledProcessError as e:
+            raise InstallerError(f"Failed to install Flatpak: {e.stderr}")
+    
+    def uninstall(self, app_name: str, install_path: Optional[str] = None) -> bool:
+        """Uninstall a Flatpak by app ID."""
+        try:
+            # Try to find the full app ID
+            app_id = self._find_app_id(app_name)
+            if not app_id:
+                return False
+            
+            result = subprocess.run(
+                ['flatpak', 'uninstall', '--user', '-y', app_id],
+                capture_output=True,
+                text=True
+            )
+            return result.returncode == 0
+        except Exception:
+            return False
+    
+    def _find_app_id(self, app_name: str) -> Optional[str]:
+        """Find the full Flatpak app ID from a partial name."""
+        try:
+            result = subprocess.run(
+                ['flatpak', 'list', '--app', '--columns=application'],
+                capture_output=True,
+                text=True
+            )
+            if result.returncode == 0:
+                for line in result.stdout.strip().split('\n'):
+                    app_id = line.strip()
+                    if app_name.lower() in app_id.lower():
+                        return app_id
+        except Exception:
+            pass
+        return None
+    
+    def is_installed(self, app_name: str) -> bool:
+        """Check if a Flatpak is installed."""
+        return self._find_app_id(app_name) is not None
+    
+    def get_installed_version(self, app_name: str) -> Optional[str]:
+        """Get the installed version of a Flatpak."""
+        try:
+            app_id = self._find_app_id(app_name)
+            if not app_id:
+                return None
+            
+            result = subprocess.run(
+                ['flatpak', 'info', app_id],
+                capture_output=True,
+                text=True
+            )
+            if result.returncode == 0:
+                for line in result.stdout.split('\n'):
+                    if line.strip().startswith('Version:'):
+                        return line.split(':', 1)[1].strip()
+            return "installed"
+        except Exception:
+            return None
+
+
+class SnapInstaller(BaseInstaller):
+    """Installer for Snap packages."""
+    
+    def is_available(self) -> bool:
+        return shutil.which('snap') is not None
+    
+    def install(self, package_path: str, progress_callback: Optional[Callable] = None) -> str:
+        """Install a Snap package."""
+        try:
+            if os.path.exists(package_path):
+                # Install from local .snap file (requires --dangerous for unsigned)
+                cmd = ['sudo', 'snap', 'install', '--dangerous', package_path]
+            else:
+                # Install from snap store
+                cmd = ['sudo', 'snap', 'install', package_path]
+            
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            
+            if result.returncode != 0:
+                raise InstallerError(f"Snap installation failed: {result.stderr}")
+            
+            return "/snap"
+            
+        except subprocess.CalledProcessError as e:
+            raise InstallerError(f"Failed to install Snap: {e.stderr}")
+    
+    def uninstall(self, app_name: str, install_path: Optional[str] = None) -> bool:
+        """Uninstall a Snap package."""
+        try:
+            # Find the snap name
+            snap_name = self._find_snap_name(app_name)
+            if not snap_name:
+                return False
+            
+            result = subprocess.run(
+                ['sudo', 'snap', 'remove', snap_name],
+                capture_output=True,
+                text=True
+            )
+            return result.returncode == 0
+        except Exception:
+            return False
+    
+    def _find_snap_name(self, app_name: str) -> Optional[str]:
+        """Find the snap name from a partial name."""
+        try:
+            result = subprocess.run(
+                ['snap', 'list'],
+                capture_output=True,
+                text=True
+            )
+            if result.returncode == 0:
+                for line in result.stdout.strip().split('\n')[1:]:  # Skip header
+                    parts = line.split()
+                    if parts and app_name.lower() in parts[0].lower():
+                        return parts[0]
+        except Exception:
+            pass
+        return None
+    
+    def is_installed(self, app_name: str) -> bool:
+        """Check if a Snap is installed."""
+        return self._find_snap_name(app_name) is not None
+    
+    def get_installed_version(self, app_name: str) -> Optional[str]:
+        """Get the installed version of a Snap."""
+        try:
+            snap_name = self._find_snap_name(app_name)
+            if not snap_name:
+                return None
+            
+            result = subprocess.run(
+                ['snap', 'list', snap_name],
+                capture_output=True,
+                text=True
+            )
+            if result.returncode == 0:
+                lines = result.stdout.strip().split('\n')
+                if len(lines) >= 2:
+                    # Format: Name  Version  Rev  Tracking  Publisher  Notes
+                    parts = lines[1].split()
+                    if len(parts) >= 2:
+                        return parts[1]
+            return "installed"
+        except Exception:
+            return None
+
+
 class PackageInstaller:
     """Main package installer that selects the appropriate installer."""
     
@@ -563,6 +736,8 @@ class PackageInstaller:
         self.installers = {
             'deb': DebInstaller(),
             'rpm': RpmInstaller(),
+            'flatpak': FlatpakInstaller(),
+            'snap': SnapInstaller(),
             'appimage': AppImageInstaller(),
             'tarball': SourceInstaller(),
             'source': SourceInstaller(),
