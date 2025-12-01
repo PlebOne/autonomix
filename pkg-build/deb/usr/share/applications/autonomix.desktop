@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=Autonomix
+Comment=Linux package manager for GitHub releases
+Exec=/usr/bin/autonomix
+Icon=autonomix
+Terminal=false
+Type=Application
+Categories=Utility;PackageManager;
+Keywords=github;package;update;appimage;

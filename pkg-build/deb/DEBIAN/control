@@ -1,0 +1,14 @@
+Package: autonomix
+Version: 0.1.0
+Section: utils
+Priority: optional
+Architecture: amd64
+Maintainer: PlebOne <contact@plebone.org>
+Description: Linux package manager for GitHub releases
+ Autonomix is a Linux application similar to Obtainium for Android.
+ It allows you to track GitHub repositories and install their releases
+ as .deb, .rpm, AppImage packages, or build from source.
+ .
+ Features include automatic update detection, a modern dark-themed UI,
+ and support for multiple package formats.
+Homepage: https://github.com/PlebOne/autonomix

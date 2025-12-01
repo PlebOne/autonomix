@@ -86,17 +86,8 @@ class Database:
         if existing:
             return  # Already registered
         
-        # Get current installed version
-        try:
-            from importlib.metadata import version
-            installed_version = version("autonomix")
-        except Exception:
-            # Running from source - try to get version from package
-            try:
-                from autonomix import __version__
-                installed_version = __version__
-            except Exception:
-                installed_version = "dev"
+        # Detect how Autonomix was installed
+        package_type, installed_version = self._detect_self_installation()
         
         now = datetime.now().isoformat()
         autonomix_app = App(
@@ -107,7 +98,7 @@ class Database:
             repo=AUTONOMIX_REPO,
             installed_version=installed_version,
             latest_version=None,
-            package_type="pip",  # Use pip for self-updates
+            package_type=package_type,
             install_path=None,
             added_at=now,
             updated_at=now,
@@ -115,6 +106,77 @@ class Database:
             include_prerelease=False,
         )
         self.add_app(autonomix_app)
+    
+    def _detect_self_installation(self) -> tuple[str, str]:
+        """Detect how Autonomix was installed and get version.
+        
+        Returns:
+            tuple: (package_type, installed_version)
+        """
+        import shutil
+        import subprocess
+        
+        # Check if installed via deb (dpkg)
+        if shutil.which('dpkg'):
+            try:
+                result = subprocess.run(
+                    ['dpkg', '-s', 'autonomix'],
+                    capture_output=True,
+                    text=True
+                )
+                if result.returncode == 0 and 'Status: install ok installed' in result.stdout:
+                    # Extract version from dpkg output
+                    for line in result.stdout.split('\n'):
+                        if line.startswith('Version:'):
+                            version = line.split(':', 1)[1].strip()
+                            return 'deb', version
+                    return 'deb', self._get_python_version()
+            except Exception:
+                pass
+        
+        # Check if installed via rpm
+        if shutil.which('rpm'):
+            try:
+                result = subprocess.run(
+                    ['rpm', '-q', 'autonomix'],
+                    capture_output=True,
+                    text=True
+                )
+                if result.returncode == 0:
+                    # Extract version from rpm output (format: autonomix-0.1.0-1.x86_64)
+                    try:
+                        version_result = subprocess.run(
+                            ['rpm', '-q', '--queryformat', '%{VERSION}', 'autonomix'],
+                            capture_output=True,
+                            text=True
+                        )
+                        if version_result.returncode == 0:
+                            return 'rpm', version_result.stdout.strip()
+                    except Exception:
+                        pass
+                    return 'rpm', self._get_python_version()
+            except Exception:
+                pass
+        
+        # Check if running from an AppImage
+        import os
+        if os.environ.get('APPIMAGE'):
+            return 'appimage', self._get_python_version()
+        
+        # Default to pip
+        return 'pip', self._get_python_version()
+    
+    def _get_python_version(self) -> str:
+        """Get the installed version from Python package metadata."""
+        try:
+            from importlib.metadata import version
+            return version("autonomix")
+        except Exception:
+            try:
+                from autonomix import __version__
+                return __version__
+            except Exception:
+                return "dev"
     
     def add_app(self, app: App) -> int:
         """Add a new app to the database."""
