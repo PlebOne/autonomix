@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Autonomix
+GenericName=Package Manager
+Comment=Install and manage applications from GitHub releases
+Exec=autonomix
+Icon=autonomix
+Terminal=false
+Categories=System;PackageManager;Utility;
+Keywords=package;manager;github;install;update;
+StartupWMClass=autonomix
