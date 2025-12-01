@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Autonomix
+GenericName=GitHub Release Manager
+Comment=A Linux package manager for GitHub releases
+Icon=io.github.plebone.autonomix
+Exec=autonomix
+Terminal=false
+Categories=Utility;PackageManager;
+Keywords=github;releases;packages;updates;
+StartupNotify=true

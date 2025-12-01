@@ -1,0 +1,9 @@
+/target
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+*.deb
+*.rpm
+pkg-build/

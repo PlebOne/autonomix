@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="128" height="128" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#4a90d9;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#2c5aa0;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Background circle -->
+  <circle cx="64" cy="64" r="60" fill="url(#bgGradient)" />
+  
+  <!-- Download arrow -->
+  <g fill="white">
+    <!-- Arrow body -->
+    <rect x="54" y="28" width="20" height="40" rx="3"/>
+    
+    <!-- Arrow head -->
+    <polygon points="64,92 40,60 52,60 52,68 76,68 76,60 88,60"/>
+    
+    <!-- Base line -->
+    <rect x="36" y="88" width="56" height="8" rx="4"/>
+  </g>
+  
+  <!-- GitHub-like circle accent -->
+  <circle cx="96" cy="32" r="16" fill="rgba(255,255,255,0.2)"/>
+  <circle cx="96" cy="32" r="10" fill="white"/>
+  <circle cx="96" cy="32" r="6" fill="url(#bgGradient)"/>
+</svg>
