@@ -28,7 +28,8 @@ MANIFEST
 
 # PyInstaller
 *.manifest
-*.spec
+# Keep autonomix.spec for RPM but ignore others
+*.pyinstaller.spec
 
 # Installer logs
 pip-log.txt
