@@ -1,0 +1,19 @@
+Source: autonomix
+Section: utils
+Priority: optional
+Maintainer: Plebone <contact@plebone.org>
+Build-Depends: debhelper-compat (= 13), python3, python3-pip, python3-venv, dh-python
+Standards-Version: 4.6.0
+Homepage: https://github.com/plebone/autonomix
+Rules-Requires-Root: no
+
+Package: autonomix
+Architecture: all
+Depends: ${python3:Depends}, ${misc:Depends}, python3 (>= 3.10), python3-pyside6, python3-requests
+Description: Linux package manager for GitHub releases
+ Autonomix is a Linux application similar to Obtainium for Android.
+ It allows you to track GitHub repositories and install their releases
+ as .deb, .rpm, AppImage packages, or build from source.
+ .
+ Features include automatic update detection, a modern dark-themed UI,
+ and support for multiple package formats.

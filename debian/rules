@@ -1,0 +1,13 @@
+#!/usr/bin/make -f
+
+export PYBUILD_NAME=autonomix
+
+%:
+	dh $@ --with python3 --buildsystem=pybuild
+
+override_dh_auto_install:
+	dh_auto_install
+	# Install desktop file
+	install -Dm644 data/autonomix.desktop debian/autonomix/usr/share/applications/autonomix.desktop
+	# Install icon
+	install -Dm644 autonomix/resources/autonomix.svg debian/autonomix/usr/share/icons/hicolor/scalable/apps/autonomix.svg
