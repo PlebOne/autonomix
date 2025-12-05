@@ -2,7 +2,7 @@
 set -e
 
 # Build script for Autonomix packages
-VERSION="0.2.0"
+VERSION="0.3.0"
 ARCH="amd64"
 
 echo "Building Autonomix v${VERSION}..."
@@ -32,7 +32,7 @@ Version: ${VERSION}
 Section: utils
 Priority: optional
 Architecture: ${ARCH}
-Depends: libgtk-4-1, libadwaita-1-0
+Depends: libqt5core5a, libqt5gui5, libqt5qml5, libqt5quick5
 Maintainer: PlebOne <plebone@example.com>
 Description: GitHub Release Manager for Linux
  A Linux package manager for GitHub releases, similar to Obtainium for Android.

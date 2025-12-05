@@ -7,3 +7,9 @@
 *.deb
 *.rpm
 pkg-build/
+
+# Build artifacts
+flatpak-build/repo/
+flatpak-build/.flatpak-builder/
+pkg-build/
+target/
