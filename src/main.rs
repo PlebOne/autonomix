@@ -1,7 +1,8 @@
 mod core;
 mod ui;
 
-use gtk4::prelude::*;
+use cstr::cstr;
+use qmetaobject::prelude::*;
 
 fn main() {
     // Initialize logging
@@ -18,18 +19,21 @@ fn main() {
     // Keep runtime alive
     let _guard = rt.enter();
 
-    // Create the GTK application
-    let app = libadwaita::Application::builder()
-        .application_id("io.github.plebone.autonomix")
-        .build();
+    // Register QML types
+    qml_register_type::<ui::app_model::AppModel>(
+        cstr!("Autonomix"),
+        1,
+        0,
+        cstr!("AppModel"),
+    );
 
-    app.connect_activate(|app| {
-        let window = ui::main_window::MainWindow::new(app);
-        window.window.present();
-    });
+    // Create Qt application
+    let mut engine = QmlEngine::new();
+
+    // Load the main QML file
+    engine.load_data(include_str!("ui/qml/main.qml").into());
 
     // Run the application
-    let args: Vec<String> = std::env::args().collect();
-    app.run_with_args(&args);
+    engine.exec();
 }
 

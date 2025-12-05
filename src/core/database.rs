@@ -4,6 +4,7 @@ use rusqlite::{params, Connection};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
+use super::installer::detect_self_install_type;
 use super::models::{InstallType, TrackedApp};
 
 /// Database manager for Autonomix
@@ -200,11 +201,93 @@ impl Database {
     pub fn register_self(&self) -> Result<()> {
         let repo_owner = "PlebOne";
         let repo_name = "autonomix";
+        let current_version = env!("CARGO_PKG_VERSION");
+
+        // Detect how Autonomix was installed
+        let install_type = detect_self_install_type();
 
         if !self.is_tracked(repo_owner, repo_name)? {
-            self.add_app(repo_owner, repo_name, "Autonomix")?;
-            log::info!("Registered Autonomix for self-updates");
+            // Add new entry for Autonomix
+            let id = self.add_app(repo_owner, repo_name, "Autonomix")?;
+            
+            // Set the installed version and install type if detected
+            if let Some(itype) = install_type {
+                self.update_installed(id, current_version, itype)?;
+                log::info!("Registered Autonomix for self-updates with install type: {:?}", itype);
+            } else {
+                // Just set the version without install type
+                let conn = self.conn.lock().unwrap();
+                conn.execute(
+                    "UPDATE apps SET installed_version = ?1 WHERE id = ?2",
+                    params![current_version, id],
+                )?;
+                log::info!("Registered Autonomix for self-updates (install type unknown)");
+            }
+        } else {
+            // Autonomix already tracked - update install type if we can detect it and it's not set
+            if let Some(app) = self.get_app_by_repo(repo_owner, repo_name)? {
+                // Always update the current version
+                let conn = self.conn.lock().unwrap();
+                conn.execute(
+                    "UPDATE apps SET installed_version = ?1 WHERE id = ?2",
+                    params![current_version, app.id],
+                )?;
+                drop(conn);
+
+                // Update install type if not already set or if we detect a different one
+                if let Some(detected_type) = install_type {
+                    if app.install_type.is_none() || app.install_type != Some(detected_type) {
+                        self.update_install_type(app.id, detected_type)?;
+                        log::info!("Updated Autonomix install type to: {:?}", detected_type);
+                    }
+                }
+            }
         }
+        Ok(())
+    }
+
+    /// Get an app by repository owner and name
+    pub fn get_app_by_repo(&self, repo_owner: &str, repo_name: &str) -> Result<Option<TrackedApp>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT id, repo_owner, repo_name, display_name, installed_version,
+                    latest_version, install_type, last_checked, created_at
+             FROM apps WHERE repo_owner = ?1 AND repo_name = ?2",
+        )?;
+
+        let mut rows = stmt.query(params![repo_owner, repo_name])?;
+        if let Some(row) = rows.next()? {
+            let install_type_str: Option<String> = row.get(6)?;
+            let last_checked_str: Option<String> = row.get(7)?;
+            let created_at_str: String = row.get(8)?;
+
+            Ok(Some(TrackedApp {
+                id: row.get(0)?,
+                repo_owner: row.get(1)?,
+                repo_name: row.get(2)?,
+                display_name: row.get(3)?,
+                installed_version: row.get(4)?,
+                latest_version: row.get(5)?,
+                install_type: install_type_str.and_then(|s| InstallType::from_str(&s)),
+                last_checked: last_checked_str
+                    .and_then(|s| chrono::DateTime::parse_from_rfc3339(&s).ok())
+                    .map(|dt| dt.with_timezone(&Utc)),
+                created_at: chrono::DateTime::parse_from_rfc3339(&created_at_str)
+                    .map(|dt| dt.with_timezone(&Utc))
+                    .unwrap_or_else(|_| Utc::now()),
+            }))
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// Update only the install type for an app
+    pub fn update_install_type(&self, id: i64, install_type: InstallType) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "UPDATE apps SET install_type = ?1 WHERE id = ?2",
+            params![install_type.as_str(), id],
+        )?;
         Ok(())
     }
 }

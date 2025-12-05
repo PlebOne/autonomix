@@ -10,6 +10,73 @@ pub struct Installer {
     appimage_dir: PathBuf,
 }
 
+/// Detect how Autonomix itself was installed on the system
+pub fn detect_self_install_type() -> Option<InstallType> {
+    // Check if installed via dpkg (Debian/Ubuntu)
+    if Command::new("dpkg")
+        .args(["-s", "autonomix"])
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+    {
+        log::info!("Detected Autonomix installed via dpkg (deb)");
+        return Some(InstallType::Deb);
+    }
+
+    // Check if installed via rpm (Fedora/RHEL/openSUSE)
+    if Command::new("rpm")
+        .args(["-q", "autonomix"])
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+    {
+        log::info!("Detected Autonomix installed via rpm");
+        return Some(InstallType::Rpm);
+    }
+
+    // Check if installed via flatpak
+    if Command::new("flatpak")
+        .args(["info", "io.github.plebone.autonomix"])
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+    {
+        log::info!("Detected Autonomix installed via flatpak");
+        return Some(InstallType::Flatpak);
+    }
+
+    // Check if installed via snap
+    if Command::new("snap")
+        .args(["info", "autonomix"])
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+    {
+        log::info!("Detected Autonomix installed via snap");
+        return Some(InstallType::Snap);
+    }
+
+    // Check if running from AppImage (environment variable set by AppImage runtime)
+    if std::env::var("APPIMAGE").is_ok() {
+        log::info!("Detected Autonomix running as AppImage");
+        return Some(InstallType::AppImage);
+    }
+
+    // Check if binary is in ~/.local/bin (manual binary install)
+    if let Some(home) = dirs::home_dir() {
+        let local_bin = home.join(".local/bin/autonomix");
+        if let Ok(exe_path) = std::env::current_exe() {
+            if exe_path == local_bin {
+                log::info!("Detected Autonomix installed as binary in ~/.local/bin");
+                return Some(InstallType::Binary);
+            }
+        }
+    }
+
+    log::info!("Could not detect Autonomix installation method");
+    None
+}
+
 impl Installer {
     pub fn new() -> Result<Self> {
         let data_dir = dirs::data_dir()
@@ -274,6 +341,169 @@ Categories=Utility;
 
         log::info!("Binary installed to: {:?}", dest);
         Ok(())
+    }
+
+    /// Uninstall a package based on its install type and name
+    pub fn uninstall(&self, package_name: &str, install_type: InstallType) -> Result<()> {
+        match install_type {
+            InstallType::Deb => self.uninstall_deb(package_name),
+            InstallType::Rpm => self.uninstall_rpm(package_name),
+            InstallType::AppImage => self.uninstall_appimage(package_name),
+            InstallType::Flatpak => self.uninstall_flatpak(package_name),
+            InstallType::Snap => self.uninstall_snap(package_name),
+            InstallType::Binary => self.uninstall_binary(package_name),
+            InstallType::Source => Err(anyhow::anyhow!("Source uninstallation not supported")),
+        }
+    }
+
+    /// Uninstall a .deb package using pkexec and dpkg
+    fn uninstall_deb(&self, package_name: &str) -> Result<()> {
+        log::info!("Uninstalling deb package: {}", package_name);
+
+        let status = Command::new("pkexec")
+            .args(["dpkg", "-r", package_name])
+            .stdin(Stdio::inherit())
+            .stdout(Stdio::inherit())
+            .stderr(Stdio::inherit())
+            .status()
+            .context("Failed to run pkexec dpkg -r")?;
+
+        if !status.success() {
+            anyhow::bail!("Failed to uninstall deb package");
+        }
+
+        Ok(())
+    }
+
+    /// Uninstall an .rpm package using pkexec and rpm/dnf
+    fn uninstall_rpm(&self, package_name: &str) -> Result<()> {
+        log::info!("Uninstalling rpm package: {}", package_name);
+
+        // Try dnf first (Fedora, RHEL 8+)
+        let dnf_available = Command::new("which")
+            .arg("dnf")
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false);
+
+        let status = if dnf_available {
+            Command::new("pkexec")
+                .args(["dnf", "remove", "-y", package_name])
+                .stdin(Stdio::inherit())
+                .stdout(Stdio::inherit())
+                .stderr(Stdio::inherit())
+                .status()
+                .context("Failed to run pkexec dnf remove")?
+        } else {
+            Command::new("pkexec")
+                .args(["rpm", "-e", package_name])
+                .stdin(Stdio::inherit())
+                .stdout(Stdio::inherit())
+                .stderr(Stdio::inherit())
+                .status()
+                .context("Failed to run pkexec rpm -e")?
+        };
+
+        if !status.success() {
+            anyhow::bail!("Failed to uninstall rpm package");
+        }
+
+        Ok(())
+    }
+
+    /// Uninstall an AppImage by removing it from the appimages directory
+    fn uninstall_appimage(&self, package_name: &str) -> Result<()> {
+        log::info!("Uninstalling AppImage: {}", package_name);
+
+        // Find matching AppImage files
+        let mut removed = false;
+        if let Ok(entries) = std::fs::read_dir(&self.appimage_dir) {
+            for entry in entries.flatten() {
+                let filename = entry.file_name().to_string_lossy().to_lowercase();
+                if filename.contains(&package_name.to_lowercase()) {
+                    std::fs::remove_file(entry.path())?;
+                    log::info!("Removed AppImage: {:?}", entry.path());
+                    removed = true;
+
+                    // Also remove desktop entry
+                    if let Some(data_dir) = dirs::data_dir() {
+                        let desktop_name = entry.file_name().to_string_lossy()
+                            .trim_end_matches(".AppImage")
+                            .trim_end_matches(".appimage")
+                            .to_string();
+                        let desktop_file = data_dir.join("applications").join(format!("{}.desktop", desktop_name));
+                        if desktop_file.exists() {
+                            let _ = std::fs::remove_file(&desktop_file);
+                            log::info!("Removed desktop entry: {:?}", desktop_file);
+                        }
+                    }
+                }
+            }
+        }
+
+        if !removed {
+            anyhow::bail!("AppImage not found: {}", package_name);
+        }
+
+        Ok(())
+    }
+
+    /// Uninstall a Flatpak package
+    fn uninstall_flatpak(&self, package_name: &str) -> Result<()> {
+        log::info!("Uninstalling Flatpak: {}", package_name);
+
+        let status = Command::new("flatpak")
+            .args(["uninstall", "--user", "-y", package_name])
+            .stdin(Stdio::inherit())
+            .stdout(Stdio::inherit())
+            .stderr(Stdio::inherit())
+            .status()
+            .context("Failed to run flatpak uninstall")?;
+
+        if !status.success() {
+            anyhow::bail!("Failed to uninstall flatpak package");
+        }
+
+        Ok(())
+    }
+
+    /// Uninstall a Snap package
+    fn uninstall_snap(&self, package_name: &str) -> Result<()> {
+        log::info!("Uninstalling Snap: {}", package_name);
+
+        let status = Command::new("pkexec")
+            .args(["snap", "remove", package_name])
+            .stdin(Stdio::inherit())
+            .stdout(Stdio::inherit())
+            .stderr(Stdio::inherit())
+            .status()
+            .context("Failed to run snap remove")?;
+
+        if !status.success() {
+            anyhow::bail!("Failed to uninstall snap package");
+        }
+
+        Ok(())
+    }
+
+    /// Uninstall a binary from ~/.local/bin
+    fn uninstall_binary(&self, package_name: &str) -> Result<()> {
+        log::info!("Uninstalling binary: {}", package_name);
+
+        let bin_dir = dirs::home_dir()
+            .context("Could not find home directory")?
+            .join(".local")
+            .join("bin");
+
+        let binary_path = bin_dir.join(package_name);
+
+        if binary_path.exists() {
+            std::fs::remove_file(&binary_path)?;
+            log::info!("Removed binary: {:?}", binary_path);
+            Ok(())
+        } else {
+            anyhow::bail!("Binary not found: {:?}", binary_path)
+        }
     }
 
     /// Check which package managers are available on the system

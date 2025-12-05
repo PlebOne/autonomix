@@ -1,6 +1,6 @@
 [package]
 name = "autonomix"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 authors = ["PlebOne"]
 description = "A Linux package manager for GitHub releases"
@@ -8,9 +8,9 @@ license = "MIT"
 repository = "https://github.com/PlebOne/autonomix"
 
 [dependencies]
-# GUI
-gtk4 = "0.9"
-libadwaita = "0.7"
+# GUI - Qt/QML
+qmetaobject = "0.2"
+cstr = "0.2"
 
 # Async runtime
 tokio = { version = "1", features = ["full"] }
