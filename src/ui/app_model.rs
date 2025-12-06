@@ -216,7 +216,9 @@ impl AppModel {
             let owner = app.repo_owner.clone();
             let repo = app.repo_name.clone();
 
-            tokio::spawn(async move {
+            // Use blocking runtime to ensure install completes before UI updates
+            let rt = tokio::runtime::Runtime::new().unwrap();
+            let result = rt.block_on(async {
                 if let Ok(release) = gh.get_latest_release(&owner, &repo).await {
                     // Find the asset matching the requested type
                     let requested_type = crate::core::models::InstallType::from_str(&type_str);
@@ -234,15 +236,19 @@ impl AppModel {
                                     let _ = db.update_installed(app_id, &release.tag_name, install_type);
                                 }
                                 let _ = std::fs::remove_file(&dest);
+                                return true;
                             }
                         }
                     }
                 }
+                false
             });
 
             self.loading = false;
             self.loading_changed();
-            self.load_apps();
+            if result {
+                self.load_apps();
+            }
         }
     }
 
@@ -259,12 +265,13 @@ impl AppModel {
             let inst = core.installer.clone();
             drop(core);
 
-            // Spawn async task for installation
             let app_id = app.id;
             let owner = app.repo_owner.clone();
             let repo = app.repo_name.clone();
 
-            tokio::spawn(async move {
+            // Use blocking runtime to ensure install completes before UI updates
+            let rt = tokio::runtime::Runtime::new().unwrap();
+            let result = rt.block_on(async {
                 if let Ok(release) = gh.get_latest_release(&owner, &repo).await {
                     // Get the tracked app to find preferred install type
                     let install_type_pref = db
@@ -282,15 +289,19 @@ impl AppModel {
                                     let _ = db.update_installed(app_id, &release.tag_name, install_type);
                                 }
                                 let _ = std::fs::remove_file(&dest);
+                                return true;
                             }
                         }
                     }
                 }
+                false
             });
 
             self.loading = false;
             self.loading_changed();
-            self.load_apps();
+            if result {
+                self.load_apps();
+            }
         }
     }
 
@@ -321,19 +332,21 @@ impl AppModel {
             let gh = core.github.clone();
             drop(core);
 
-            for app in apps {
-                let db_clone = db.clone();
-                let gh_clone = gh.clone();
-                let owner = app.repo_owner.clone();
-                let repo = app.repo_name.clone();
-                let app_id = app.id;
+            // Use blocking runtime to fetch all updates
+            let rt = tokio::runtime::Runtime::new().unwrap();
+            rt.block_on(async {
+                for app in apps {
+                    let owner = app.repo_owner.clone();
+                    let repo = app.repo_name.clone();
+                    let app_id = app.id;
 
-                tokio::spawn(async move {
-                    if let Ok(release) = gh_clone.get_latest_release(&owner, &repo).await {
-                        let _ = db_clone.update_latest_version(app_id, &release.tag_name);
+                    if let Ok(release) = gh.get_latest_release(&owner, &repo).await {
+                        let _ = db.update_latest_version(app_id, &release.tag_name);
                     }
-                });
-            }
+                }
+            });
+        } else {
+            drop(core);
         }
 
         self.loading = false;
