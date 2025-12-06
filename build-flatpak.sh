@@ -2,7 +2,7 @@
 set -e
 
 # Build script for Autonomix Flatpak package
-VERSION="0.3.0"
+VERSION="0.3.1"
 APP_ID="io.github.plebone.autonomix"
 
 echo "Building Autonomix Flatpak v${VERSION}..."

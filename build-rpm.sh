@@ -2,7 +2,7 @@
 set -e
 
 # Build script for Autonomix RPM package
-VERSION="0.3.0"
+VERSION="0.3.1"
 RELEASE="1"
 ARCH="x86_64"
 
