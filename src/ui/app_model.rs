@@ -76,6 +76,8 @@ pub struct AppModel {
     add_app: qt_method!(fn(&mut self, url: QString) -> bool),
     remove_app: qt_method!(fn(&mut self, index: i32)),
     install_app: qt_method!(fn(&mut self, index: i32)),
+    install_app_with_type: qt_method!(fn(&mut self, index: i32, install_type: QString)),
+    get_available_packages: qt_method!(fn(&mut self, index: i32) -> QString),
     uninstall_app: qt_method!(fn(&mut self, index: i32)),
     refresh: qt_method!(fn(&mut self)),
     update_all: qt_method!(fn(&mut self)),
@@ -152,6 +154,95 @@ impl AppModel {
                 drop(core);
                 self.load_apps();
             }
+        }
+    }
+
+    /// Get available package types for an app as JSON array
+    /// Returns: [{"type": "deb", "name": "Debian Package", "filename": "app.deb", "size": 1234}, ...]
+    fn get_available_packages(&mut self, index: i32) -> QString {
+        let app_data = self.apps.get(index as usize).cloned();
+        
+        if let Some(app) = app_data {
+            let core = CORE.lock().unwrap();
+            let gh = core.github.clone();
+            drop(core);
+            
+            let owner = app.repo_owner.clone();
+            let repo = app.repo_name.clone();
+            
+            // Use blocking runtime to fetch release info
+            let rt = tokio::runtime::Runtime::new().unwrap();
+            if let Ok(release) = rt.block_on(gh.get_latest_release(&owner, &repo)) {
+                let mut packages: Vec<serde_json::Value> = Vec::new();
+                
+                for asset in &release.assets {
+                    if asset.is_linux() && asset.matches_architecture() {
+                        if let Some(install_type) = asset.detect_install_type() {
+                            packages.push(serde_json::json!({
+                                "type": install_type.as_str(),
+                                "name": install_type.display_name(),
+                                "filename": asset.name,
+                                "size": asset.size,
+                                "url": asset.browser_download_url
+                            }));
+                        }
+                    }
+                }
+                
+                if let Ok(json) = serde_json::to_string(&packages) {
+                    return QString::from(json);
+                }
+            }
+        }
+        QString::from("[]")
+    }
+
+    /// Install app with a specific package type
+    fn install_app_with_type(&mut self, index: i32, install_type_str: QString) {
+        let app_data = self.apps.get(index as usize).cloned();
+        let type_str = install_type_str.to_string();
+        
+        if let Some(app) = app_data {
+            self.loading = true;
+            self.loading_changed();
+
+            let core = CORE.lock().unwrap();
+            let db = core.db.clone();
+            let gh = core.github.clone();
+            let inst = core.installer.clone();
+            drop(core);
+
+            let app_id = app.id;
+            let owner = app.repo_owner.clone();
+            let repo = app.repo_name.clone();
+
+            tokio::spawn(async move {
+                if let Ok(release) = gh.get_latest_release(&owner, &repo).await {
+                    // Find the asset matching the requested type
+                    let requested_type = crate::core::models::InstallType::from_str(&type_str);
+                    
+                    let asset = release.assets.iter().find(|a| {
+                        a.is_linux() && a.matches_architecture() && a.detect_install_type() == requested_type
+                    });
+                    
+                    if let Some(asset) = asset {
+                        if let Some(install_type) = asset.detect_install_type() {
+                            let dest = inst.downloads_dir().join(&asset.name);
+
+                            if gh.download_asset(&asset.browser_download_url, &dest).await.is_ok() {
+                                if inst.install(&dest, install_type).is_ok() {
+                                    let _ = db.update_installed(app_id, &release.tag_name, install_type);
+                                }
+                                let _ = std::fs::remove_file(&dest);
+                            }
+                        }
+                    }
+                }
+            });
+
+            self.loading = false;
+            self.loading_changed();
+            self.load_apps();
         }
     }
 

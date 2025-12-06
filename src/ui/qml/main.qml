@@ -10,10 +10,157 @@ ApplicationWindow {
     height: 600
     title: "Autonomix"
 
+    // Track which app index is being installed
+    property int selectedAppIndex: -1
+    property var availablePackages: []
+
     // Application model
     AppModel {
         id: appModel
         Component.onCompleted: refresh()
+    }
+
+    // Helper function to format file size
+    function formatSize(bytes) {
+        if (bytes < 1024) return bytes + " B"
+        if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB"
+        return (bytes / (1024 * 1024)).toFixed(1) + " MB"
+    }
+
+    // Package selection dialog
+    Dialog {
+        id: packageDialog
+        title: "Select Package Type"
+        modal: true
+        anchors.centerIn: parent
+        width: 500
+
+        ColumnLayout {
+            anchors.fill: parent
+            spacing: 12
+
+            Label {
+                text: "Choose which package format to install:"
+                font.bold: true
+                Layout.fillWidth: true
+            }
+
+            ListView {
+                id: packageListView
+                Layout.fillWidth: true
+                Layout.preferredHeight: Math.min(availablePackages.length * 60, 300)
+                clip: true
+                model: availablePackages
+
+                delegate: Rectangle {
+                    width: packageListView.width
+                    height: 56
+                    radius: 6
+                    color: mouseArea.containsMouse ? palette.highlight : palette.base
+                    border.color: palette.mid
+                    border.width: 1
+
+                    MouseArea {
+                        id: mouseArea
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        onClicked: {
+                            appModel.install_app_with_type(selectedAppIndex, modelData.type)
+                            packageDialog.close()
+                        }
+                    }
+
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.margins: 10
+                        spacing: 12
+
+                        // Package type icon
+                        Rectangle {
+                            width: 36
+                            height: 36
+                            radius: 6
+                            color: {
+                                switch(modelData.type) {
+                                    case "deb": return "#E95420"    // Ubuntu orange
+                                    case "rpm": return "#294172"    // Fedora blue
+                                    case "appimage": return "#4B275F" // AppImage purple
+                                    case "flatpak": return "#4A86CF" // Flatpak blue
+                                    case "snap": return "#82BEA0"   // Snap green
+                                    default: return "#666666"
+                                }
+                            }
+
+                            Label {
+                                anchors.centerIn: parent
+                                text: {
+                                    switch(modelData.type) {
+                                        case "deb": return "DEB"
+                                        case "rpm": return "RPM"
+                                        case "appimage": return "AI"
+                                        case "flatpak": return "FP"
+                                        case "snap": return "SNP"
+                                        case "binary": return "BIN"
+                                        default: return "?"
+                                    }
+                                }
+                                color: "white"
+                                font.bold: true
+                                font.pixelSize: 11
+                            }
+                        }
+
+                        // Package info
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 2
+
+                            Label {
+                                text: modelData.name
+                                font.bold: true
+                            }
+
+                            Label {
+                                text: modelData.filename + " (" + formatSize(modelData.size) + ")"
+                                font.pixelSize: 11
+                                opacity: 0.7
+                                elide: Text.ElideMiddle
+                                Layout.fillWidth: true
+                            }
+                        }
+
+                        // Select indicator
+                        Label {
+                            text: "→"
+                            font.pixelSize: 18
+                            opacity: mouseArea.containsMouse ? 1.0 : 0.3
+                        }
+                    }
+                }
+            }
+
+            Label {
+                visible: availablePackages.length === 0
+                text: "No compatible packages found for your system."
+                opacity: 0.7
+                Layout.fillWidth: true
+                horizontalAlignment: Text.AlignHCenter
+            }
+        }
+
+        standardButtons: Dialog.Cancel
+    }
+
+    // Function to show package selection
+    function showPackageSelection(index) {
+        selectedAppIndex = index
+        var packagesJson = appModel.get_available_packages(index)
+        try {
+            availablePackages = JSON.parse(packagesJson)
+        } catch (e) {
+            availablePackages = []
+        }
+        packageDialog.open()
     }
 
     // Add dialog
@@ -212,7 +359,14 @@ ApplicationWindow {
                                 text: model.hasUpdate ? "Update" : (model.isInstalled ? "Reinstall" : "Install")
                                 highlighted: model.hasUpdate || !model.isInstalled
                                 enabled: model.latestVersion !== ""
-                                onClicked: appModel.install_app(index)
+                                onClicked: {
+                                    // Show package selection for first install, use saved type for updates
+                                    if (!model.isInstalled) {
+                                        showPackageSelection(index)
+                                    } else {
+                                        appModel.install_app(index)
+                                    }
+                                }
                             }
 
                             Button {
