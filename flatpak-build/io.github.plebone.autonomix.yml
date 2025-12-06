@@ -1,7 +1,9 @@
 app-id: io.github.plebone.autonomix
 runtime: org.kde.Platform
-runtime-version: '6.7'
+runtime-version: '6.8'
 sdk: org.kde.Sdk
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.rust-stable
 command: autonomix
 
 finish-args:
@@ -9,20 +11,27 @@ finish-args:
   - --share=network
   - --socket=fallback-x11
   - --socket=wayland
+  - --socket=x11
   - --filesystem=home
   - --talk-name=org.freedesktop.Flatpak
+  - --device=dri
+
+build-options:
+  append-path: /usr/lib/sdk/rust-stable/bin
+  build-args:
+    - --share=network
+  env:
+    CARGO_HOME: /run/build/autonomix/cargo
+    RUST_BACKTRACE: '1'
 
 modules:
   - name: autonomix
     buildsystem: simple
     build-commands:
-      - install -Dm755 autonomix /app/bin/autonomix
-      - install -Dm644 io.github.plebone.autonomix.desktop /app/share/applications/io.github.plebone.autonomix.desktop
-      - install -Dm644 io.github.plebone.autonomix.svg /app/share/icons/hicolor/scalable/apps/io.github.plebone.autonomix.svg || true
+      - cargo build --release
+      - install -Dm755 target/release/autonomix /app/bin/autonomix
+      - install -Dm644 resources/io.github.plebone.autonomix.desktop /app/share/applications/io.github.plebone.autonomix.desktop
+      - install -Dm644 resources/io.github.plebone.autonomix.svg /app/share/icons/hicolor/scalable/apps/io.github.plebone.autonomix.svg || true
     sources:
-      - type: file
-        path: ../target/release/autonomix
-      - type: file
-        path: ../resources/io.github.plebone.autonomix.desktop
-      - type: file
-        path: ../resources/io.github.plebone.autonomix.svg
+      - type: dir
+        path: ..
