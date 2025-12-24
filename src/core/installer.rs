@@ -117,15 +117,34 @@ impl Installer {
     fn install_deb(&self, path: &Path) -> Result<()> {
         log::info!("Installing deb package: {:?}", path);
 
-        // Use pkexec with dpkg -i
-        let status = Command::new("pkexec")
-            .args(["dpkg", "-i"])
-            .arg(path)
-            .stdin(Stdio::inherit())
-            .stdout(Stdio::inherit())
-            .stderr(Stdio::inherit())
-            .status()
-            .context("Failed to run pkexec dpkg")?;
+        // Check if apt is available (preferred for dependency resolution)
+        let apt_available = Command::new("which")
+            .arg("apt")
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false);
+
+        let status = if apt_available {
+            // Use apt install which handles both install and upgrade, plus dependencies
+            Command::new("pkexec")
+                .args(["apt", "install", "-y", "--reinstall"])
+                .arg(path)
+                .stdin(Stdio::inherit())
+                .stdout(Stdio::inherit())
+                .stderr(Stdio::inherit())
+                .status()
+                .context("Failed to run pkexec apt")?
+        } else {
+            // Use pkexec with dpkg -i (works for install and upgrade)
+            Command::new("pkexec")
+                .args(["dpkg", "-i"])
+                .arg(path)
+                .stdin(Stdio::inherit())
+                .stdout(Stdio::inherit())
+                .stderr(Stdio::inherit())
+                .status()
+                .context("Failed to run pkexec dpkg")?
+        };
 
         if !status.success() {
             // Try to fix dependencies
@@ -157,8 +176,9 @@ impl Installer {
             .unwrap_or(false);
 
         let status = if dnf_available {
+            // Use dnf upgrade which handles both install and update cases
             Command::new("pkexec")
-                .args(["dnf", "install", "-y"])
+                .args(["dnf", "install", "-y", "--allowerasing"])
                 .arg(path)
                 .stdin(Stdio::inherit())
                 .stdout(Stdio::inherit())
@@ -166,9 +186,9 @@ impl Installer {
                 .status()
                 .context("Failed to run pkexec dnf")?
         } else {
-            // Fall back to rpm
+            // Fall back to rpm with -U (upgrade) which also handles fresh installs
             Command::new("pkexec")
-                .args(["rpm", "-i", "--force"])
+                .args(["rpm", "-U", "--force"])
                 .arg(path)
                 .stdin(Stdio::inherit())
                 .stdout(Stdio::inherit())

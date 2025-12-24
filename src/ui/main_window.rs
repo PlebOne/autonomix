@@ -28,7 +28,9 @@ pub enum AppMessage {
     AppDeleted(i64),
     Error(String),
     RefreshComplete,
+    InstallStarted(i64),
     InstallComplete(i64, Result<(), String>),
+    UninstallStarted(i64),
     UninstallComplete(i64, Result<(), String>),
 }
 
@@ -390,7 +392,24 @@ impl MainWindow {
                         }
                     }
 
-                    AppMessage::InstallComplete(_app_id, result) => {
+                    AppMessage::InstallStarted(app_id) => {
+                        // Set the row to busy state
+                        let rows = app_rows.borrow();
+                        if let Some(row) = rows.iter().find(|r| r.app_id == app_id) {
+                            row.set_busy(true);
+                        }
+                        let toast = Toast::new("Installing...");
+                        toast_overlay.add_toast(toast);
+                    }
+
+                    AppMessage::InstallComplete(app_id, result) => {
+                        // Clear busy state
+                        {
+                            let rows = app_rows.borrow();
+                            if let Some(row) = rows.iter().find(|r| r.app_id == app_id) {
+                                row.set_busy(false);
+                            }
+                        }
                         match result {
                             Ok(()) => {
                                 let toast = Toast::new("Installation complete");
@@ -408,7 +427,24 @@ impl MainWindow {
                         }
                     }
 
-                    AppMessage::UninstallComplete(_app_id, result) => {
+                    AppMessage::UninstallStarted(app_id) => {
+                        // Set the row to busy state
+                        let rows = app_rows.borrow();
+                        if let Some(row) = rows.iter().find(|r| r.app_id == app_id) {
+                            row.set_busy(true);
+                        }
+                        let toast = Toast::new("Uninstalling...");
+                        toast_overlay.add_toast(toast);
+                    }
+
+                    AppMessage::UninstallComplete(app_id, result) => {
+                        // Clear busy state
+                        {
+                            let rows = app_rows.borrow();
+                            if let Some(row) = rows.iter().find(|r| r.app_id == app_id) {
+                                row.set_busy(false);
+                            }
+                        }
                         match result {
                             Ok(()) => {
                                 let toast = Toast::new("Uninstallation complete");
@@ -569,6 +605,9 @@ impl MainWindow {
         github: Arc<GitHubApi>,
         installer: Arc<Installer>,
     ) {
+        // Send install started message
+        let _ = tx.send(AppMessage::InstallStarted(app_id));
+        
         glib::spawn_future_local(async move {
             let result = Self::do_install(app_id, db.clone(), github, installer).await;
             let _ = tx.send(AppMessage::InstallComplete(app_id, result.map_err(|e| e.to_string())));
@@ -626,6 +665,9 @@ impl MainWindow {
         db: Database,
         installer: Arc<Installer>,
     ) {
+        // Send uninstall started message
+        let _ = tx.send(AppMessage::UninstallStarted(app_id));
+        
         glib::spawn_future_local(async move {
             let result = Self::do_uninstall(app_id, db.clone(), installer);
             let _ = tx.send(AppMessage::UninstallComplete(app_id, result.map_err(|e| e.to_string())));
@@ -672,6 +714,9 @@ impl MainWindow {
                         let github = github.clone();
                         let installer = installer.clone();
                         let tx = tx.clone();
+
+                        // Send install started message
+                        let _ = tx.send(AppMessage::InstallStarted(app.id));
 
                         let result = Self::do_install(app.id, db, github, installer).await;
                         let _ = tx.send(AppMessage::InstallComplete(

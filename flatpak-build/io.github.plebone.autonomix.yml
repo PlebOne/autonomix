@@ -31,7 +31,8 @@ modules:
       - cargo build --release
       - install -Dm755 target/release/autonomix /app/bin/autonomix
       - install -Dm644 resources/io.github.plebone.autonomix.desktop /app/share/applications/io.github.plebone.autonomix.desktop
-      - install -Dm644 resources/io.github.plebone.autonomix.svg /app/share/icons/hicolor/scalable/apps/io.github.plebone.autonomix.svg || true
+      - install -Dm644 resources/io.github.plebone.autonomix.svg /app/share/icons/hicolor/scalable/apps/io.github.plebone.autonomix.svg
+      - install -Dm644 resources/io.github.plebone.autonomix.metainfo.xml /app/share/metainfo/io.github.plebone.autonomix.metainfo.xml
     sources:
       - type: dir
         path: ..

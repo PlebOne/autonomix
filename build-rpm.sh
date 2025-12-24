@@ -21,6 +21,7 @@ mkdir -p "$TARBALL_DIR"
 cp target/release/autonomix "$TARBALL_DIR/"
 cp resources/io.github.plebone.autonomix.desktop "$TARBALL_DIR/"
 cp resources/io.github.plebone.autonomix.svg "$TARBALL_DIR/" 2>/dev/null || echo "No icon file found"
+cp resources/io.github.plebone.autonomix.metainfo.xml "$TARBALL_DIR/" 2>/dev/null || echo "No metainfo file found"
 tar czf "$RPM_BUILD_DIR/SOURCES/autonomix-${VERSION}.tar.gz" "$TARBALL_DIR"
 rm -rf "$TARBALL_DIR"
 
@@ -55,15 +56,26 @@ Features:
 mkdir -p %{buildroot}%{_bindir}
 mkdir -p %{buildroot}%{_datadir}/applications
 mkdir -p %{buildroot}%{_datadir}/icons/hicolor/scalable/apps
+mkdir -p %{buildroot}%{_datadir}/metainfo
 
 install -m 755 autonomix %{buildroot}%{_bindir}/autonomix
 install -m 644 io.github.plebone.autonomix.desktop %{buildroot}%{_datadir}/applications/
 install -m 644 io.github.plebone.autonomix.svg %{buildroot}%{_datadir}/icons/hicolor/scalable/apps/ 2>/dev/null || :
+install -m 644 io.github.plebone.autonomix.metainfo.xml %{buildroot}%{_datadir}/metainfo/ 2>/dev/null || :
+
+%post
+/usr/bin/gtk-update-icon-cache -f -t %{_datadir}/icons/hicolor &>/dev/null || :
+/usr/bin/update-desktop-database %{_datadir}/applications &>/dev/null || :
+
+%postun
+/usr/bin/gtk-update-icon-cache -f -t %{_datadir}/icons/hicolor &>/dev/null || :
+/usr/bin/update-desktop-database %{_datadir}/applications &>/dev/null || :
 
 %files
 %{_bindir}/autonomix
 %{_datadir}/applications/io.github.plebone.autonomix.desktop
 %{_datadir}/icons/hicolor/scalable/apps/io.github.plebone.autonomix.svg
+%{_datadir}/metainfo/io.github.plebone.autonomix.metainfo.xml
 
 %changelog
 * $(date "+%a %b %d %Y") PlebOne <plebone@example.com> - ${VERSION}-${RELEASE}

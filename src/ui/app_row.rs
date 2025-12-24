@@ -1,7 +1,9 @@
 use gtk4::prelude::*;
-use gtk4::{Align, Box as GtkBox, Button, Label, Orientation};
+use gtk4::{Align, Box as GtkBox, Button, Label, Orientation, Spinner, Stack};
 use libadwaita::prelude::*;
 use libadwaita::ActionRow;
+use std::cell::Cell;
+use std::rc::Rc;
 
 use crate::core::models::TrackedApp;
 
@@ -13,6 +15,9 @@ pub struct AppRow {
     pub delete_button: Button,
     pub app_id: i64,
     is_installed: bool,
+    button_stack: Stack,
+    spinner: Spinner,
+    is_busy: Rc<Cell<bool>>,
 }
 
 impl AppRow {
@@ -60,6 +65,11 @@ impl AppRow {
 
         row.add_suffix(&version_box);
 
+        // Create a stack to switch between button and spinner
+        let button_stack = Stack::builder()
+            .valign(Align::Center)
+            .build();
+
         // Install/Update button
         let install_button = if app.has_update() {
             Button::builder()
@@ -86,7 +96,29 @@ impl AppRow {
             install_button.set_sensitive(false);
         }
 
-        button_box.append(&install_button);
+        // Spinner for progress indication
+        let spinner = Spinner::builder()
+            .valign(Align::Center)
+            .build();
+        
+        // Create a box for spinner and label
+        let progress_box = GtkBox::builder()
+            .orientation(Orientation::Horizontal)
+            .spacing(8)
+            .valign(Align::Center)
+            .build();
+        progress_box.append(&spinner);
+        let progress_label = Label::builder()
+            .label("Working...")
+            .css_classes(["dim-label"])
+            .build();
+        progress_box.append(&progress_label);
+
+        button_stack.add_named(&install_button, Some("button"));
+        button_stack.add_named(&progress_box, Some("progress"));
+        button_stack.set_visible_child_name("button");
+
+        button_box.append(&button_stack);
 
         // Uninstall button (only visible if installed)
         let uninstall_button = Button::builder()
@@ -129,7 +161,31 @@ impl AppRow {
             delete_button,
             app_id: app.id,
             is_installed: app.is_installed(),
+            button_stack,
+            spinner,
+            is_busy: Rc::new(Cell::new(false)),
         }
+    }
+
+    /// Set the row to busy state (show spinner)
+    pub fn set_busy(&self, busy: bool) {
+        self.is_busy.set(busy);
+        if busy {
+            self.spinner.start();
+            self.button_stack.set_visible_child_name("progress");
+            self.uninstall_button.set_sensitive(false);
+            self.delete_button.set_sensitive(false);
+        } else {
+            self.spinner.stop();
+            self.button_stack.set_visible_child_name("button");
+            self.uninstall_button.set_sensitive(true);
+            self.delete_button.set_sensitive(true);
+        }
+    }
+
+    /// Check if the row is busy
+    pub fn is_busy(&self) -> bool {
+        self.is_busy.get()
     }
 
     fn build_subtitle(app: &TrackedApp) -> String {
