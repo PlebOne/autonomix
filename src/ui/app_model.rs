@@ -256,6 +256,7 @@ impl AppModel {
         let app_data = self.apps.get(index as usize).cloned();
 
         if let Some(app) = app_data {
+            log::info!("Starting install/update for app: {} (index: {})", app.display_name, index);
             self.loading = true;
             self.loading_changed();
 
@@ -268,30 +269,65 @@ impl AppModel {
             let app_id = app.id;
             let owner = app.repo_owner.clone();
             let repo = app.repo_name.clone();
+            let display_name = app.display_name.clone();
 
             // Use blocking runtime to ensure install completes before UI updates
             let rt = tokio::runtime::Runtime::new().unwrap();
             let result = rt.block_on(async {
-                if let Ok(release) = gh.get_latest_release(&owner, &repo).await {
-                    // Get the tracked app to find preferred install type
-                    let install_type_pref = db
-                        .get_app(app_id)
-                        .ok()
-                        .flatten()
-                        .and_then(|a| a.install_type);
+                log::info!("Fetching latest release for {}/{}", owner, repo);
+                match gh.get_latest_release(&owner, &repo).await {
+                    Ok(release) => {
+                        log::info!("Got release: {} with {} assets", release.tag_name, release.assets.len());
+                        
+                        // Get the tracked app to find preferred install type
+                        let install_type_pref = db
+                            .get_app(app_id)
+                            .ok()
+                            .flatten()
+                            .and_then(|a| a.install_type);
+                        
+                        log::info!("Preferred install type: {:?}", install_type_pref);
 
-                    if let Some(asset) = gh.find_best_asset(&release.assets, install_type_pref) {
-                        if let Some(install_type) = asset.detect_install_type() {
-                            let dest = inst.downloads_dir().join(&asset.name);
+                        if let Some(asset) = gh.find_best_asset(&release.assets, install_type_pref) {
+                            log::info!("Found asset: {} ({})", asset.name, asset.browser_download_url);
+                            
+                            if let Some(install_type) = asset.detect_install_type() {
+                                let dest = inst.downloads_dir().join(&asset.name);
+                                log::info!("Downloading to: {:?}", dest);
 
-                            if gh.download_asset(&asset.browser_download_url, &dest).await.is_ok() {
-                                if inst.install(&dest, install_type).is_ok() {
-                                    let _ = db.update_installed(app_id, &release.tag_name, install_type);
+                                match gh.download_asset(&asset.browser_download_url, &dest).await {
+                                    Ok(_) => {
+                                        log::info!("Download complete, installing as {:?}", install_type);
+                                        match inst.install(&dest, install_type) {
+                                            Ok(_) => {
+                                                log::info!("Installation successful!");
+                                                let _ = db.update_installed(app_id, &release.tag_name, install_type);
+                                                let _ = std::fs::remove_file(&dest);
+                                                return true;
+                                            }
+                                            Err(e) => {
+                                                log::error!("Installation failed: {}", e);
+                                                let _ = std::fs::remove_file(&dest);
+                                            }
+                                        }
+                                    }
+                                    Err(e) => {
+                                        log::error!("Download failed: {}", e);
+                                    }
                                 }
-                                let _ = std::fs::remove_file(&dest);
-                                return true;
+                            } else {
+                                log::error!("Could not detect install type for asset: {}", asset.name);
+                            }
+                        } else {
+                            log::error!("No compatible asset found for {}", display_name);
+                            for asset in &release.assets {
+                                log::debug!("  Asset: {} (linux={}, arch_match={})", 
+                                    asset.name, asset.is_linux(), asset.matches_architecture());
                             }
                         }
+                    }
+                    Err(e) => {
+                        log::error!("Failed to get release: {}", e);
                     }
                 }
                 false

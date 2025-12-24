@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
@@ -117,6 +118,13 @@ impl Installer {
     fn install_deb(&self, path: &Path) -> Result<()> {
         log::info!("Installing deb package: {:?}", path);
 
+        // Copy file to /tmp so pkexec (root) can access it
+        // User home directories may not be accessible to root (encrypted homes, etc.)
+        let filename = path.file_name().context("Invalid deb path")?;
+        let tmp_path = std::path::Path::new("/tmp").join(filename);
+        std::fs::copy(path, &tmp_path).context("Failed to copy deb to /tmp")?;
+        log::info!("Copied deb to temp location: {:?}", tmp_path);
+
         // Check if apt is available (preferred for dependency resolution)
         let apt_available = Command::new("which")
             .arg("apt")
@@ -128,7 +136,7 @@ impl Installer {
             // Use apt install which handles both install and upgrade, plus dependencies
             Command::new("pkexec")
                 .args(["apt", "install", "-y", "--reinstall"])
-                .arg(path)
+                .arg(&tmp_path)
                 .stdin(Stdio::inherit())
                 .stdout(Stdio::inherit())
                 .stderr(Stdio::inherit())
@@ -138,13 +146,16 @@ impl Installer {
             // Use pkexec with dpkg -i (works for install and upgrade)
             Command::new("pkexec")
                 .args(["dpkg", "-i"])
-                .arg(path)
+                .arg(&tmp_path)
                 .stdin(Stdio::inherit())
                 .stdout(Stdio::inherit())
                 .stderr(Stdio::inherit())
                 .status()
                 .context("Failed to run pkexec dpkg")?
         };
+
+        // Clean up temp file
+        let _ = std::fs::remove_file(&tmp_path);
 
         if !status.success() {
             // Try to fix dependencies
@@ -168,6 +179,25 @@ impl Installer {
     fn install_rpm(&self, path: &Path) -> Result<()> {
         log::info!("Installing rpm package: {:?}", path);
 
+        // Copy file to /tmp so pkexec (root) can access it
+        // User home directories may not be accessible to root (encrypted homes, SELinux, etc.)
+        let filename = path.file_name().context("Invalid rpm path")?;
+        let tmp_path = std::path::Path::new("/tmp").join(filename);
+        
+        // Copy and sync to ensure file is completely written
+        {
+            let mut src = std::fs::File::open(path).context("Failed to open source rpm")?;
+            let mut dst = std::fs::File::create(&tmp_path).context("Failed to create temp rpm")?;
+            std::io::copy(&mut src, &mut dst).context("Failed to copy rpm to /tmp")?;
+            dst.sync_all().context("Failed to sync temp rpm")?;
+        }
+        
+        // Set permissions to ensure root can read
+        std::fs::set_permissions(&tmp_path, std::fs::Permissions::from_mode(0o644))
+            .context("Failed to set permissions on temp rpm")?;
+        
+        log::info!("Copied rpm to temp location: {:?}", tmp_path);
+
         // Try dnf first (Fedora, RHEL 8+)
         let dnf_available = Command::new("which")
             .arg("dnf")
@@ -179,7 +209,7 @@ impl Installer {
             // Use dnf upgrade which handles both install and update cases
             Command::new("pkexec")
                 .args(["dnf", "install", "-y", "--allowerasing"])
-                .arg(path)
+                .arg(&tmp_path)
                 .stdin(Stdio::inherit())
                 .stdout(Stdio::inherit())
                 .stderr(Stdio::inherit())
@@ -189,13 +219,16 @@ impl Installer {
             // Fall back to rpm with -U (upgrade) which also handles fresh installs
             Command::new("pkexec")
                 .args(["rpm", "-U", "--force"])
-                .arg(path)
+                .arg(&tmp_path)
                 .stdin(Stdio::inherit())
                 .stdout(Stdio::inherit())
                 .stderr(Stdio::inherit())
                 .status()
                 .context("Failed to run pkexec rpm")?
         };
+
+        // Clean up temp file
+        let _ = std::fs::remove_file(&tmp_path);
 
         if !status.success() {
             anyhow::bail!("Failed to install rpm package");
