@@ -51,6 +51,16 @@
   </screenshots>
   
   <releases>
+    <release version="0.3.4" date="2024-12-24">
+      <description>
+        <p>Fixed package installation for systems with restricted home directory access</p>
+      </description>
+    </release>
+    <release version="0.3.3" date="2024-12-24">
+      <description>
+        <p>Added progress indicators during install/uninstall, fixed desktop integration</p>
+      </description>
+    </release>
     <release version="0.3.2" date="2024-12-24">
       <description>
         <p>Bug fixes and improvements</p>

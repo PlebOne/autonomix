@@ -1,6 +1,6 @@
 [package]
 name = "autonomix"
-version = "0.3.2"
+version = "0.3.4"
 edition = "2021"
 authors = ["PlebOne"]
 description = "A Linux package manager for GitHub releases"

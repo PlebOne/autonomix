@@ -2,7 +2,7 @@
 set -e
 
 # Build script for Autonomix packages
-VERSION="0.3.3"
+VERSION="0.3.4"
 ARCH="amd64"
 
 echo "Building Autonomix v${VERSION}..."
