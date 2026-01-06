@@ -1,7 +1,7 @@
 name: autonomix
 description: A Linux package manager for GitHub releases
 publish_to: 'none'
-version: 0.3.4+1
+version: 0.3.5+1
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -28,6 +28,7 @@ dependencies:
   intl: ^0.18.0
   url_launcher: ^6.1.0
   logger: ^2.0.0
+  package_info_plus: ^9.0.0
 
 dev_dependencies:
   flutter_test:
